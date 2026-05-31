@@ -3,7 +3,7 @@
 ## Loading the library
 
 ```lua
-local hub = loadstring(game:HttpGet("your_url_here"))()
+local hub = loadstring(game:HttpGet("https://raw.githubusercontent.com/IslamicHubLib/Islam/refs/heads/main/IslamicHubLibOPENSOURCE", true))()
 ```
 
 ---
