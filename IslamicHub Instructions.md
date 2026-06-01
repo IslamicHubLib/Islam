@@ -1,3 +1,5 @@
+# If you need help with any of this, feed the open source script to AI which is in this github page, and feed this exact page to ai (Copy and paste to AI is what im talking about when i say feed) and ask it to make you some walkspeed slider or toggle or button whatever it is.
+
 # IslamicHub — Beginner Guide
 
 ## Step 1 — Load the library
