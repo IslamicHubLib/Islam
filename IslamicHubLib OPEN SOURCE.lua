@@ -12,12 +12,31 @@ local W, H = 360, 340
 local sideW = 48
 local headerH = 42
 local accent = Color3.fromRGB(130, 200, 255)
+local isMobile = uis.TouchEnabled and not uis.KeyboardEnabled
+local btnH = isMobile and 42 or 36
+local tabBH = isMobile and 36 or 30
+local savedPos = nil
 
 local function t(obj, dur, props, es)
 	tw:Create(obj, TweenInfo.new(dur, es or Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props):Play()
 end
 local function rnd(p, r) local c = Instance.new("UICorner", p); c.CornerRadius = UDim.new(0, r or 8) end
 local function brd(p, col, th) local s = Instance.new("UIStroke", p); s.Color = col or Color3.fromRGB(32,32,32); s.Thickness = th or 1; return s end
+
+local function ripple(parent, ix, iy)
+	local f = Instance.new("Frame", parent)
+	f.ZIndex = parent.ZIndex + 10
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.new(0, ix - parent.AbsolutePosition.X, 0, iy - parent.AbsolutePosition.Y)
+	f.Size = UDim2.new(0, 0, 0, 0)
+	f.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	f.BackgroundTransparency = 0.88
+	f.BorderSizePixel = 0
+	rnd(f, 50)
+	local sz = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 2.2
+	t(f, 0.48, { Size = UDim2.new(0, sz, 0, sz), BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+	task.delay(0.5, function() f:Destroy() end)
+end
 
 local sg = Instance.new("ScreenGui")
 sg.Name = "MyHub"
@@ -128,6 +147,12 @@ closeBtn.BorderSizePixel = 0
 closeBtn.AutoButtonColor = false
 closeBtn.ZIndex = 3
 rnd(closeBtn, 6)
+closeBtn.MouseEnter:Connect(function()
+	t(closeBtn, 0.12, { BackgroundColor3 = Color3.fromRGB(35, 12, 12), TextColor3 = Color3.fromRGB(200, 80, 80) })
+end)
+closeBtn.MouseLeave:Connect(function()
+	t(closeBtn, 0.12, { BackgroundColor3 = Color3.fromRGB(20, 20, 20), TextColor3 = Color3.fromRGB(130, 130, 130) })
+end)
 
 local iconSg = Instance.new("ScreenGui")
 iconSg.Name = "MyHubIcon"
@@ -151,6 +176,7 @@ iconBtn.BorderSizePixel = 0
 rnd(iconBtn, 10)
 
 closeBtn.Activated:Connect(function()
+	savedPos = root.Position
 	t(root, 0.2, { Size = UDim2.new(0, W, 0, 0) })
 	task.delay(0.22, function()
 		root.Visible = false
@@ -160,6 +186,7 @@ end)
 iconBtn.Activated:Connect(function()
 	iconWrap.Visible = false
 	root.Visible = true
+	if savedPos then root.Position = savedPos end
 	t(root, 0.35, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Back)
 end)
 
@@ -230,22 +257,63 @@ contentArea.BackgroundTransparency = 1
 contentArea.BorderSizePixel = 0
 contentArea.ClipsDescendants = true
 
+local spinnerWrap = Instance.new("Frame", inner)
+spinnerWrap.Size = UDim2.new(0, 24, 0, 24)
+spinnerWrap.AnchorPoint = Vector2.new(0.5, 0.5)
+spinnerWrap.Position = UDim2.new(0, sideW + (W - sideW) / 2, 0, headerH + (H - headerH) / 2)
+spinnerWrap.BackgroundTransparency = 1
+spinnerWrap.BorderSizePixel = 0
+spinnerWrap.Visible = false
+spinnerWrap.ZIndex = 20
+
+local spinRing = Instance.new("Frame", spinnerWrap)
+spinRing.Size = UDim2.new(1, 0, 1, 0)
+spinRing.BackgroundTransparency = 1
+spinRing.BorderSizePixel = 0
+rnd(spinRing, 12)
+local spinStroke = Instance.new("UIStroke", spinRing)
+spinStroke.Color = Color3.fromRGB(32, 32, 32)
+spinStroke.Thickness = 2
+
+local spinDot = Instance.new("Frame", spinnerWrap)
+spinDot.Size = UDim2.new(0, 6, 0, 6)
+spinDot.AnchorPoint = Vector2.new(0.5, 0.5)
+spinDot.Position = UDim2.new(0.5, 0, 0, 3)
+spinDot.BackgroundColor3 = accent
+spinDot.BorderSizePixel = 0
+spinDot.ZIndex = 21
+rnd(spinDot, 3)
+
+rs.Heartbeat:Connect(function(dt)
+	if spinnerWrap.Visible then
+		spinnerWrap.Rotation = (spinnerWrap.Rotation + dt * 320) % 360
+	end
+end)
+
 local dragging, ds, sp = false, nil, nil
-header.InputBegan:Connect(function(i)
+
+local function startDrag(i, noEdge)
 	if i.UserInputType ~= Enum.UserInputType.MouseButton1 and i.UserInputType ~= Enum.UserInputType.Touch then return end
-	if i.Position.X > root.AbsolutePosition.X + root.AbsoluteSize.X - 40 then return end
+	if not noEdge and i.Position.X > root.AbsolutePosition.X + root.AbsoluteSize.X - 40 then return end
 	dragging = true
 	ds = i.Position
 	sp = root.Position
-end)
+end
+
+header.InputBegan:Connect(function(i) startDrag(i, false) end)
+sidebar.InputBegan:Connect(function(i) startDrag(i, true) end)
+
 uis.InputChanged:Connect(function(i)
 	if not dragging then return end
 	if i.UserInputType ~= Enum.UserInputType.MouseMove and i.UserInputType ~= Enum.UserInputType.Touch then return end
 	local d = i.Position - ds
-	root.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+	local np = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+	root.Position = np
+	savedPos = np
 end)
 uis.InputEnded:Connect(function(i)
 	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+		if dragging then savedPos = root.Position end
 		dragging = false
 	end
 end)
@@ -253,24 +321,41 @@ end)
 local allTabs = {}
 local activeTab = nil
 local tabCount = 0
+local switching = false
 
 local function setActive(tab)
-	if activeTab == tab then return end
+	if activeTab == tab or switching then return end
+	switching = true
+
 	if activeTab then
-		t(activeTab.btn, 0.15, { TextColor3 = Color3.fromRGB(65, 65, 65) })
+		t(activeTab.btn, 0.18, { TextColor3 = Color3.fromRGB(65, 65, 65) })
+		t(activeTab.glow, 0.2, { BackgroundTransparency = 1 })
 		local old = activeTab.page
-		t(old, 0.18, { Position = UDim2.new(0, -12, 0, 0) })
-		task.delay(0.2, function() old.Visible = false end)
+		t(old, 0.22, { Position = UDim2.new(0, -(W - sideW), 0, 0) })
+		task.delay(0.24, function()
+			old.Visible = false
+			old.Position = UDim2.new(0, 0, 0, 0)
+		end)
 	end
-	activeTab = tab
+
 	local by = tab.btn.AbsolutePosition.Y - sidebar.AbsolutePosition.Y
 	local bh = tab.btn.AbsoluteSize.Y
 	indicator.Visible = true
-	t(indicator, 0.22, { Position = UDim2.new(1, -2, 0, by + bh/2 - 8) })
-	t(tab.btn, 0.15, { TextColor3 = accent })
-	tab.page.Position = UDim2.new(0, 12, 0, 0)
-	tab.page.Visible = true
-	t(tab.page, 0.22, { Position = UDim2.new(0, 0, 0, 0) })
+	t(indicator, 0.3, { Position = UDim2.new(1, -2, 0, by + bh/2 - 8) })
+
+	spinnerWrap.Visible = true
+	spinnerWrap.Rotation = 0
+
+	task.delay(0.3, function()
+		spinnerWrap.Visible = false
+		activeTab = tab
+		t(tab.btn, 0.18, { TextColor3 = accent })
+		t(tab.glow, 0.22, { BackgroundTransparency = 0.88 })
+		tab.page.Position = UDim2.new(0, W - sideW, 0, 0)
+		tab.page.Visible = true
+		t(tab.page, 0.28, { Position = UDim2.new(0, 0, 0, 0) })
+		task.delay(0.3, function() switching = false end)
+	end)
 end
 
 local fpsCount, fpsTime, fpsVal, pingVal = 0, 0, "--", "--"
@@ -297,8 +382,22 @@ function hub:AddTab(name)
 	tabCount += 1
 	local internal = { order = 0 }
 
-	local btn = Instance.new("TextButton", tabList)
-	btn.Size = UDim2.new(1, 0, 0, 30)
+	local container = Instance.new("Frame", tabList)
+	container.Size = UDim2.new(1, 0, 0, tabBH)
+	container.BackgroundTransparency = 1
+	container.BorderSizePixel = 0
+	container.LayoutOrder = tabCount
+
+	local glow = Instance.new("Frame", container)
+	glow.Size = UDim2.new(1, 0, 1, 0)
+	glow.BackgroundColor3 = accent
+	glow.BackgroundTransparency = 1
+	glow.BorderSizePixel = 0
+	glow.ZIndex = 1
+	rnd(glow, 6)
+
+	local btn = Instance.new("TextButton", container)
+	btn.Size = UDim2.new(1, 0, 1, 0)
 	btn.BackgroundTransparency = 1
 	btn.Text = string.sub(name, 1, 2)
 	btn.TextColor3 = Color3.fromRGB(65, 65, 65)
@@ -307,6 +406,7 @@ function hub:AddTab(name)
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = false
 	btn.LayoutOrder = tabCount
+	btn.ZIndex = 2
 
 	local page = Instance.new("ScrollingFrame", contentArea)
 	page.Size = UDim2.new(1, 0, 1, 0)
@@ -329,6 +429,7 @@ function hub:AddTab(name)
 
 	internal.btn = btn
 	internal.page = page
+	internal.glow = glow
 
 	btn.Activated:Connect(function() setActive(internal) end)
 	table.insert(allTabs, internal)
@@ -366,10 +467,11 @@ function hub:AddTab(name)
 	function tabApi:AddToggle(tname, default, cb)
 		local state = default or false
 		local row = Instance.new("Frame", page)
-		row.Size = UDim2.new(1, 0, 0, 36)
+		row.Size = UDim2.new(1, 0, 0, btnH)
 		row.BackgroundColor3 = Color3.fromRGB(11, 11, 11)
 		row.BorderSizePixel = 0
 		row.LayoutOrder = nxt()
+		row.ClipsDescendants = true
 		rnd(row, 8)
 		brd(row, Color3.fromRGB(24, 24, 24))
 		local lbl = Instance.new("TextLabel", row)
@@ -378,7 +480,7 @@ function hub:AddTab(name)
 		lbl.BackgroundTransparency = 1
 		lbl.Text = tname
 		lbl.TextColor3 = Color3.fromRGB(195, 195, 195)
-		lbl.TextSize = 11
+		lbl.TextSize = isMobile and 12 or 11
 		lbl.Font = Enum.Font.GothamSemibold
 		lbl.TextXAlignment = Enum.TextXAlignment.Left
 		local pill = Instance.new("Frame", row)
@@ -406,6 +508,11 @@ function hub:AddTab(name)
 		hb.BackgroundTransparency = 1
 		hb.Text = ""
 		hb.AutoButtonColor = false
+		hb.InputBegan:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				ripple(hb, i.Position.X, i.Position.Y)
+			end
+		end)
 		hb.Activated:Connect(function()
 			state = not state
 			refresh()
@@ -419,19 +526,31 @@ function hub:AddTab(name)
 
 	function tabApi:AddButton(bname, cb)
 		local b = Instance.new("TextButton", page)
-		b.Size = UDim2.new(1, 0, 0, 36)
+		b.Size = UDim2.new(1, 0, 0, btnH)
 		b.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 		b.Text = bname
 		b.TextColor3 = Color3.fromRGB(215, 215, 215)
-		b.TextSize = 11
+		b.TextSize = isMobile and 12 or 11
 		b.Font = Enum.Font.GothamBold
 		b.BorderSizePixel = 0
 		b.AutoButtonColor = false
 		b.LayoutOrder = nxt()
+		b.ClipsDescendants = true
 		rnd(b, 8)
-		brd(b, Color3.fromRGB(26, 26, 26))
-		b.MouseEnter:Connect(function() t(b, 0.1, { BackgroundColor3 = Color3.fromRGB(17, 17, 17) }) end)
-		b.MouseLeave:Connect(function() t(b, 0.1, { BackgroundColor3 = Color3.fromRGB(12, 12, 12) }) end)
+		local bStroke = brd(b, Color3.fromRGB(26, 26, 26))
+		b.MouseEnter:Connect(function()
+			t(b, 0.12, { BackgroundColor3 = Color3.fromRGB(18, 18, 18) })
+			t(bStroke, 0.12, { Color = Color3.fromRGB(55, 55, 55) })
+		end)
+		b.MouseLeave:Connect(function()
+			t(b, 0.12, { BackgroundColor3 = Color3.fromRGB(12, 12, 12) })
+			t(bStroke, 0.12, { Color = Color3.fromRGB(26, 26, 26) })
+		end)
+		b.InputBegan:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				ripple(b, i.Position.X, i.Position.Y)
+			end
+		end)
 		b.Activated:Connect(function() pcall(cb) end)
 	end
 
@@ -589,4 +708,3 @@ end
 t(root, 0.35, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Back)
 
 return hub
-
