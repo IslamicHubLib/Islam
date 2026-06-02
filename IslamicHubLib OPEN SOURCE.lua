@@ -433,7 +433,7 @@ function hub:AddTab(name)
 
 	btn.Activated:Connect(function() setActive(internal) end)
 	table.insert(allTabs, internal)
-	if #allTabs == 1 then task.defer(function() setActive(internal) end) end
+	if #allTabs == 1 then task.spawn(function() task.wait() setActive(internal) end) end
 
 	local function nxt() internal.order += 1; return internal.order end
 
